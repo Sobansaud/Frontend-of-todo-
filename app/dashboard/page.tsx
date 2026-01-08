@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 import { getTodos, createTodo, updateTodo, deleteTodo, toggleTodoComplete } from '@/lib/api';
+import { useChatContext } from '@/components/chatbot/ChatProvider';
 import { Plus, Sparkles, Layout, CheckCircle2, ListTodo, Calendar, Clock, ArrowRight, X } from 'lucide-react';
 import Hero from '@/components/layout/Hero';
 
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   const [userName, setUserName] = React.useState('');
   const router = useRouter();
   const { addToast } = useToast();
+  const { chatState } = useChatContext();
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -47,7 +49,7 @@ export default function DashboardPage() {
     };
 
     fetchTodos();
-  }, [addToast]);
+  }, [addToast, chatState.refreshTrigger]);
 
   const handleAddTodo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +161,7 @@ export default function DashboardPage() {
       <div className="section-horizontal section-vertical max-w-7xl mx-auto">
         {/* Hero */}
         <div className="animate-welcome">
-          <React.Suspense fallback={<div className="h-36" />}> 
+          <React.Suspense fallback={<div className="h-36" />}>
             {/* lazy-like boundary for hero */}
             {/* @ts-ignore - dynamic import not necessary */}
             <Hero userName={userName || 'User'} pending={totalCount - completedCount} onPrimaryAction={() => setShowAddModal(true)} />
