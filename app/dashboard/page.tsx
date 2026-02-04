@@ -20,8 +20,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = React.useState(true);
   const [showAddModal, setShowAddModal] = React.useState(false);
   const [editingTodo, setEditingTodo] = React.useState<Todo | null>(null);
-  const [formData, setFormData] = React.useState({ title: '', description: '' });
+  const [formData, setFormData] = React.useState({
+    title: '',
+    description: '',
+    priority: 'Medium',
+    tags: [] as string[],
+    dueDate: '',
+    recurrence: 'none'
+  });
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [userName, setUserName] = React.useState('');
+  const [filterStatus, setFilterStatus] = React.useState('all');
+  const [filterPriority, setFilterPriority] = React.useState('all');
+  const [filterTag, setFilterTag] = React.useState('');
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [sortOption, setSortOption] = React.useState('created_at_desc');
   const router = useRouter();
   const { addToast } = useToast();
   const { chatState } = useChatContext();
@@ -35,7 +48,7 @@ export default function DashboardPage() {
     const fetchTodos = async () => {
       try {
         setLoading(true);
-        const data = await getTodos();
+        const data = await getTodos(filterStatus, undefined, filterPriority, filterTag, searchTerm, sortOption);
         setTodos(data);
       } catch (error) {
         console.error('Failed to fetch todos:', error);
@@ -49,21 +62,61 @@ export default function DashboardPage() {
     };
 
     fetchTodos();
-  }, [addToast, chatState.refreshTrigger]);
+  }, [addToast, chatState.refreshTrigger, filterStatus, filterPriority, filterTag, searchTerm, sortOption]);
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.title.trim()) {
+      newErrors.title = 'Task title is required';
+    } else if (formData.title.trim().length < 3) {
+      newErrors.title = 'Task title must be at least 3 characters';
+    }
+
+    if (formData.dueDate) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(formData.dueDate)) {
+        newErrors.dueDate = 'Invalid date format. Use YYYY-MM-DD';
+      } else {
+        const date = new Date(formData.dueDate);
+        if (isNaN(date.getTime())) {
+          newErrors.dueDate = 'Invalid date';
+        }
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleAddTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim()) return;
+
+    if (!validateForm()) {
+      return;
+    }
 
     try {
       const newTodo = await createTodo({
         title: formData.title,
         description: formData.description,
         completed: false,
+        priority: formData.priority,
+        tags: formData.tags,
+        dueDate: formData.dueDate || undefined,
+        recurrence: formData.recurrence
       });
       setTodos([newTodo, ...todos]);
       setShowAddModal(false);
-      setFormData({ title: '', description: '' });
+      setFormData({
+        title: '',
+        description: '',
+        priority: 'Medium',
+        tags: [],
+        dueDate: '',
+        recurrence: 'none'
+      });
+      setErrors({});
       addToast({
         type: 'success',
         message: 'Task created successfully!',
@@ -80,22 +133,46 @@ export default function DashboardPage() {
 
   const handleEditTodo = (todo: Todo) => {
     setEditingTodo(todo);
-    setFormData({ title: todo.title, description: todo.description || '' });
+    setFormData({
+      title: todo.title,
+      description: todo.description || '',
+      priority: todo.priority || 'Medium',
+      tags: todo.tags || [],
+      dueDate: todo.dueDate || '',
+      recurrence: todo.recurrence || 'none'
+    });
   };
 
   const handleUpdateTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingTodo || !formData.title.trim()) return;
+
+    if (!editingTodo) return;
+
+    if (!validateForm()) {
+      return;
+    }
 
     try {
       const updated = await updateTodo(editingTodo.id, {
         title: formData.title,
         description: formData.description,
         completed: editingTodo.completed,
+        priority: formData.priority,
+        tags: formData.tags,
+        dueDate: formData.dueDate || undefined,
+        recurrence: formData.recurrence
       });
       setTodos(todos.map((todo) => (todo.id === updated.id ? updated : todo)));
       setEditingTodo(null);
-      setFormData({ title: '', description: '' });
+      setFormData({
+        title: '',
+        description: '',
+        priority: 'Medium',
+        tags: [],
+        dueDate: '',
+        recurrence: 'none'
+      });
+      setErrors({});
       addToast({
         type: 'success',
         message: 'Task updated successfully',
@@ -114,8 +191,14 @@ export default function DashboardPage() {
     const todo = todos.find((t) => t.id === id);
     if (!todo) return;
 
+    // Optimistic update
+    setTodos(todos.map((t) =>
+      t.id === id ? { ...t, completed: !t.completed } : t
+    ));
+
     try {
       const updated = await toggleTodoComplete(id, !todo.completed);
+      // Update with server response to ensure consistency
       setTodos(todos.map((t) => (t.id === id ? updated : t)));
 
       if (updated.completed) {
@@ -124,9 +207,20 @@ export default function DashboardPage() {
           message: '🎉 Task completed! Great job!',
           duration: 3000,
         });
+      } else {
+        addToast({
+          type: 'info',
+          message: 'Task marked as pending',
+          duration: 3000,
+        });
       }
     } catch (error) {
       console.error('Failed to toggle todo:', error);
+      // Revert optimistic update on error
+      setTodos(todos.map((t) =>
+        t.id === id ? { ...t, completed: !t.completed } : t
+      ));
+
       addToast({
         type: 'error',
         message: 'Failed to update task',
@@ -219,13 +313,82 @@ export default function DashboardPage() {
         </div>
 
         {/* Tasks Section Header */}
-        <div className="flex items-center justify-between mb-10 animate-welcome" style={{ animationDelay: '0.2s' }}>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-10 animate-welcome" style={{ animationDelay: '0.2s' }}>
           <div className="flex items-center gap-4">
             <h3 className="text-2xl font-black tracking-tighter">Current Objectives</h3>
             <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
             <span className="px-4 py-1 bg-muted/50 rounded-full text-foreground text-[10px] font-black tracking-[0.2em] border border-ui-border/20">
               {todos.length} REGISTRY
             </span>
+          </div>
+
+          {/* Filter and Sort Controls */}
+          <div className="flex flex-wrap gap-3">
+            {/* Search Input */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-10 px-4 py-2 bg-muted/30 rounded-xl text-sm border border-transparent focus:border-primary/50 transition-all font-medium w-40 focus:w-48 transition-width"
+              />
+            </div>
+
+            {/* Status Filter */}
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="h-10 px-4 py-2 bg-muted/30 rounded-xl text-sm border border-transparent focus:border-primary/50 transition-all appearance-none"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+            </select>
+
+            {/* Priority Filter */}
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="h-10 px-4 py-2 bg-muted/30 rounded-xl text-sm border border-transparent focus:border-primary/50 transition-all appearance-none"
+            >
+              <option value="all">All Priorities</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+
+            {/* Sort Control */}
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value)}
+              className="h-10 px-4 py-2 bg-muted/30 rounded-xl text-sm border border-transparent focus:border-primary/50 transition-all appearance-none"
+            >
+              <option value="created_at_desc">Newest First</option>
+              <option value="created_at_asc">Oldest First</option>
+              <option value="due_date_asc">Due Date (Soon)</option>
+              <option value="due_date_desc">Due Date (Later)</option>
+              <option value="priority_desc">Priority (High)</option>
+              <option value="priority_asc">Priority (Low)</option>
+              <option value="title_asc">Title (A-Z)</option>
+              <option value="title_desc">Title (Z-A)</option>
+            </select>
+
+            {/* Clear Filters Button */}
+            {(filterStatus !== 'all' || filterPriority !== 'all' || searchTerm !== '') && (
+              <button
+                onClick={() => {
+                  setFilterStatus('all');
+                  setFilterPriority('all');
+                  setFilterTag('');
+                  setSearchTerm('');
+                  setSortOption('created_at_desc');
+                }}
+                className="h-10 px-4 py-2 bg-destructive/20 text-destructive rounded-xl text-sm border border-destructive/30 hover:bg-destructive/30 transition-all"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 
@@ -317,12 +480,23 @@ export default function DashboardPage() {
                 <Input
                   type="text"
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, title: e.target.value });
+                    // Clear error when user starts typing
+                    if (errors.title) {
+                      setErrors(prev => ({ ...prev, title: '' }));
+                    }
+                  }}
                   placeholder="Task identification..."
                   autoFocus
                   required
-                  className="h-16 rounded-2xl bg-muted/30 text-xl border-2 border-transparent focus:border-primary/50 transition-all shadow-inner font-bold"
+                  className={`h-16 rounded-2xl bg-muted/30 text-xl border-2 transition-all shadow-inner font-bold ${
+                    errors.title ? 'border-red-500 focus:border-red-500' : 'border-transparent focus:border-primary/50'
+                  }`}
                 />
+                {errors.title && (
+                  <p className="text-red-500 text-sm mt-1">{errors.title}</p>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -334,6 +508,77 @@ export default function DashboardPage() {
                   rows={4}
                   className="w-full rounded-2xl px-6 py-5 bg-muted/30 text-lg border-2 border-transparent focus:border-primary/50 transition-all resize-none outline-none shadow-inner font-medium placeholder:opacity-50"
                 />
+              </div>
+
+              {/* Priority Selector */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black opacity-40 uppercase tracking-[0.4em] pl-1">Priority Level</label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  className="w-full h-16 rounded-2xl bg-muted/30 text-lg border-2 border-transparent focus:border-primary/50 transition-all px-6 font-bold appearance-none"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+
+              {/* Due Date Picker */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black opacity-40 uppercase tracking-[0.4em] pl-1">Due Date</label>
+                <Input
+                  type="date"
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  className="h-16 rounded-2xl bg-muted/30 text-lg border-2 border-transparent focus:border-primary/50 transition-all px-6 font-bold"
+                />
+              </div>
+
+              {/* Recurrence Selector */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black opacity-40 uppercase tracking-[0.4em] pl-1">Recurrence</label>
+                <select
+                  value={formData.recurrence}
+                  onChange={(e) => setFormData({ ...formData, recurrence: e.target.value })}
+                  className="w-full h-16 rounded-2xl bg-muted/30 text-lg border-2 border-transparent focus:border-primary/50 transition-all px-6 font-bold appearance-none"
+                >
+                  <option value="none">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+
+              {/* Tags Input */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black opacity-40 uppercase tracking-[0.4em] pl-1">Tags (comma separated)</label>
+                <Input
+                  type="text"
+                  value={formData.tags.join(', ')}
+                  onChange={(e) => {
+                    const tags = e.target.value
+                      .split(',')
+                      .map(tag => tag.trim())
+                      .filter(tag => tag.length > 0);
+                    setFormData({ ...formData, tags });
+                  }}
+                  placeholder="e.g., work, urgent, project"
+                  className="h-16 rounded-2xl bg-muted/30 text-lg border-2 border-transparent focus:border-primary/50 transition-all px-6 font-bold"
+                />
+                {/* Display current tags as chips */}
+                {formData.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {formData.tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 pt-6">

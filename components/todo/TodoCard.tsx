@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { Todo } from '@/lib/types';
-import { CheckCircle2, Trash2, Edit3, Calendar, Clock } from 'lucide-react';
+import { CheckCircle2, Trash2, Edit3, Calendar, Clock, Tag, AlertTriangle } from 'lucide-react';
 
 export interface TodoCardProps {
   todo: Todo;
@@ -32,11 +32,41 @@ const TodoCard = ({ todo, onToggle, onDelete, onEdit, index = 0 }: TodoCardProps
     onEdit(todo);
   };
 
+  // Priority badge styling
+  const getPriorityClasses = (priority: string = 'Medium') => {
+    switch (priority) {
+      case 'High':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'Medium':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'Low':
+        return 'bg-green-500/20 text-green-400 border-green-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+    }
+  };
+
+  // Format due date
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return '';
+
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return dateString; // Return original string if parsing fails
+    }
+  };
+
+  // Check if task is overdue
+  const isOverdue = todo.isOverdue;
+
   return (
     <div
       className={cn(
         'group relative glass-premium rounded-[2rem] p-6 border border-white/10 hover:border-primary/30 transition-all duration-500 hover:-translate-y-1',
         todo.completed && 'opacity-60 bg-muted/20',
+        isOverdue && !todo.completed && 'ring-2 ring-red-500/50',
         isDeleting && 'opacity-0 scale-95'
       )}
     >
@@ -58,9 +88,16 @@ const TodoCard = ({ todo, onToggle, onDelete, onEdit, index = 0 }: TodoCardProps
             <div className="min-w-0">
               <h3 className={cn(
                 'text-lg font-bold tracking-tight transition-all duration-300',
-                todo.completed && 'line-through opacity-50'
+                todo.completed && 'line-through opacity-50',
+                isOverdue && !todo.completed && 'text-red-400'
               )}>
                 {todo.title}
+                {isOverdue && !todo.completed && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-xs bg-red-500/20 px-2 py-0.5 rounded-full">
+                    <AlertTriangle className="w-3 h-3" />
+                    OVERDUE
+                  </span>
+                )}
               </h3>
             </div>
           </div>
@@ -88,11 +125,51 @@ const TodoCard = ({ todo, onToggle, onDelete, onEdit, index = 0 }: TodoCardProps
         {/* Description */}
         {todo.description && (
           <p className={cn(
-            'body text-sm mb-6 line-clamp-2 opacity-70 group-hover:opacity-100 transition-opacity',
+            'body text-sm mb-4 line-clamp-2 opacity-70 group-hover:opacity-100 transition-opacity',
             todo.completed && 'line-through opacity-40'
           )}>
             {todo.description}
           </p>
+        )}
+
+        {/* Priority and Tags */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {/* Priority Badge */}
+          {todo.priority && (
+            <span className={cn(
+              'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border',
+              getPriorityClasses(todo.priority)
+            )}>
+              <AlertTriangle className="w-3 h-3" />
+              {todo.priority}
+            </span>
+          )}
+
+          {/* Tags */}
+          {todo.tags && todo.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {todo.tags.map((tag, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                >
+                  <Tag className="w-2.5 h-2.5" />
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Due Date */}
+        {todo.dueDate && (
+          <div className={cn(
+            'flex items-center gap-2 mb-4 text-sm',
+            isOverdue && !todo.completed ? 'text-red-400' : 'text-muted-foreground'
+          )}>
+            <Calendar className="w-4 h-4" />
+            <span>Due: {formatDate(todo.dueDate)}</span>
+          </div>
         )}
 
         {/* Footer info */}

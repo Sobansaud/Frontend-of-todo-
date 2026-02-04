@@ -16,6 +16,12 @@ export interface Todo {
   createdAt: string; // ISO date string
   updatedAt: string; // ISO date string
   userId: string;
+  // New fields for intermediate/advanced features
+  priority?: string; // "High" | "Medium" | "Low", default: "Medium"
+  tags?: string[]; // Array of tag strings, default: []
+  dueDate?: string; // "YYYY-MM-DD" format
+  recurrence?: string; // "daily" | "weekly" | "monthly" | "none"
+  isOverdue?: boolean; // Calculated property for UI
 }
 
 // AuthSession type based on data-model.md
@@ -47,12 +53,22 @@ export interface CreateTodoRequest {
   title: string;
   description?: string;
   completed?: boolean;
+  // New fields for intermediate/advanced features
+  priority?: string; // "High" | "Medium" | "Low", default: "Medium"
+  tags?: string[]; // Array of tag strings, default: []
+  dueDate?: string; // "YYYY-MM-DD" format
+  recurrence?: string; // "daily" | "weekly" | "monthly" | "none"
 }
 
 export interface UpdateTodoRequest {
   title?: string;
   description?: string;
   completed?: boolean;
+  // New fields for intermediate/advanced features
+  priority?: string; // "High" | "Medium" | "Low"
+  tags?: string[]; // Array of tag strings
+  dueDate?: string; // "YYYY-MM-DD" format
+  recurrence?: string; // "daily" | "weekly" | "monthly" | "none"
 }
 
 export interface SignUpRequest {
@@ -70,6 +86,10 @@ export interface SignInRequest {
 export interface TodoFormValues {
   title: string;
   description?: string;
+  priority?: string; // "High" | "Medium" | "Low", default: "Medium"
+  tags?: string[]; // Array of tag strings, default: []
+  dueDate?: string; // "YYYY-MM-DD" format
+  recurrence?: string; // "daily" | "weekly" | "monthly" | "none"
 }
 
 export interface AuthFormValues {

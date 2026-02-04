@@ -172,15 +172,54 @@ class ApiClient {
   }
 
   // Todo methods
-  async getTodos(): Promise<Todo[]> {
-    const todos = await this.request<any[]>('/tasks/');
-    return todos.map(this.mapTaskToTodo);
+  async getTodos(
+    status?: string,
+    filterStatus?: string,
+    filterPriority?: string,
+    filterTag?: string,
+    filterDueDateStart?: string,
+    filterDueDateEnd?: string,
+    search?: string,
+    sort?: string,
+    page: number = 1,
+    limit: number = 50
+  ): Promise<Todo[]> {
+    // Build query parameters
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (filterStatus) params.append('filter_status', filterStatus);
+    if (filterPriority) params.append('filter_priority', filterPriority);
+    if (filterTag) params.append('filter_tag', filterTag);
+    if (filterDueDateStart) params.append('filter_due_date_start', filterDueDateStart);
+    if (filterDueDateEnd) params.append('filter_due_date_end', filterDueDateEnd);
+    if (search) params.append('search', search);
+    if (sort) params.append('sort', sort);
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
+
+    const queryString = params.toString();
+    const endpoint = `/tasks/${queryString ? '?' + queryString : ''}`;
+
+    const response = await this.request<any>(endpoint);
+
+    // Handle both array response (for backward compatibility) and object response (with pagination)
+    if (Array.isArray(response)) {
+      // Legacy response format
+      return response.map(this.mapTaskToTodo);
+    } else {
+      // New response format with pagination
+      return response.tasks.map(this.mapTaskToTodo);
+    }
   }
 
   async createTodo(todoData: CreateTodoRequest): Promise<Todo> {
     const task = await this.request<any>('/tasks/', {
       method: 'POST',
-      body: JSON.stringify(todoData),
+      body: JSON.stringify({
+        ...todoData,
+        dueDate: todoData.dueDate || undefined, // Send as undefined if empty to use backend defaults
+        tags: todoData.tags || []
+      }),
     });
     return this.mapTaskToTodo(task);
   }
@@ -188,7 +227,11 @@ class ApiClient {
   async updateTodo(id: number, todoData: UpdateTodoRequest): Promise<Todo> {
     const task = await this.request<any>(`/tasks/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(todoData),
+      body: JSON.stringify({
+        ...todoData,
+        dueDate: todoData.dueDate || undefined, // Send as undefined if empty to use backend defaults
+        tags: todoData.tags || []
+      }),
     });
     return this.mapTaskToTodo(task);
   }
@@ -216,6 +259,12 @@ class ApiClient {
       createdAt: task.created_at,
       updatedAt: task.updated_at,
       userId: task.user_id,
+      // New fields for intermediate/advanced features
+      priority: task.priority,
+      tags: task.tags,
+      dueDate: task.due_date,
+      recurrence: task.recurrence,
+      isOverdue: task.is_overdue,
     };
   }
 }
