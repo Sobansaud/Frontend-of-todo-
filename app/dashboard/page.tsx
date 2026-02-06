@@ -50,6 +50,44 @@ export default function DashboardPage() {
         setLoading(true);
         const data = await getTodos(filterStatus, undefined, filterPriority, filterTag, searchTerm, sortOption);
         setTodos(data);
+
+        // Merge chatbot tool results (e.g., add_task) into the UI immediately
+        try {
+          const toolCalls = (chatState as any).lastToolCalls || [];
+          if (toolCalls.length > 0) {
+            const added = toolCalls
+              .filter((t: any) => t.tool === 'add_task')
+              .map((t: any) => t.result)
+              .filter(Boolean);
+
+            if (added.length > 0) {
+              setTodos(prev => {
+                const existing = new Set(prev.map(p => p.id));
+                const toAdd = added
+                  .filter((a: any) => !existing.has(a.id))
+                  .map((a: any) => ({
+                    id: a.id,
+                    title: a.title,
+                    description: a.description || '',
+                    completed: a.completed || (a.status === 'completed'),
+                    createdAt: a.created_at || new Date().toISOString(),
+                    updatedAt: a.updated_at || new Date().toISOString(),
+                    userId: a.user_id || '',
+                    priority: a.priority || 'Medium',
+                    tags: a.tags || [],
+                    dueDate: a.due_date || undefined,
+                    recurrence: a.recurrence || 'none',
+                    isOverdue: a.is_overdue || false,
+                  } as Todo));
+
+                if (toAdd.length === 0) return prev;
+                return [...toAdd, ...prev];
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Error merging chatbot results:', e);
+        }
       } catch (error) {
         console.error('Failed to fetch todos:', error);
         addToast({

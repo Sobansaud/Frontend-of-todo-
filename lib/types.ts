@@ -112,6 +112,7 @@ export interface ChatState {
   isLoading: boolean;
   conversationId: string | null;
   refreshTrigger: number;
+  lastToolCalls?: ToolCallInfo[];
 }
 
 export interface ToolCallInfo {

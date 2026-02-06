@@ -64,7 +64,7 @@ const TodoCard = ({ todo, onToggle, onDelete, onEdit, index = 0 }: TodoCardProps
   return (
     <div
       className={cn(
-        'group relative glass-premium rounded-[2rem] p-6 border border-white/10 hover:border-primary/30 transition-all duration-500 hover:-translate-y-1',
+        'w-full group relative glass-premium rounded-2xl p-4 sm:p-6 border border-white/10 hover:border-primary/30 transition-all duration-300 hover:-translate-y-1 shadow-md dark:shadow-lg',
         todo.completed && 'opacity-60 bg-muted/20',
         isOverdue && !todo.completed && 'ring-2 ring-red-500/50',
         isDeleting && 'opacity-0 scale-95'

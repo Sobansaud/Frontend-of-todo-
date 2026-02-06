@@ -9,6 +9,7 @@ export const useChat = () => {
     isLoading: false,
     conversationId: null,
     refreshTrigger: 0,
+    lastToolCalls: [],
   });
 
   const openChat = useCallback(() => {
@@ -86,6 +87,7 @@ export const useChat = () => {
         messages: [...prev.messages, assistantMessage],
         isLoading: false,
         refreshTrigger: prev.refreshTrigger + 1,
+        lastToolCalls: response.tool_calls || [],
       }));
     } catch (error) {
       console.error('Error sending message:', error);
